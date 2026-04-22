@@ -1,49 +1,34 @@
-from logging.config import fileConfig
-
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
-from models import Base
-
-from alembic import context
-import sys
-from os.path import abspath, dirname
-sys.path.insert(0, dirname(dirname(abspath(__file__))))
-from dotenv import load_dotenv
 import os
+import sys
+from logging.config import fileConfig
+from sqlalchemy import engine_from_config, pool
+from alembic import context
+from dotenv import load_dotenv
+from os.path import abspath, dirname
 
-# this is the Alembic Config object, which provides
-# access to the values within the .ini file in use.
+# 1. Setup paths and load environment variables FIRST
+sys.path.insert(0, dirname(dirname(abspath(__file__))))
+load_dotenv()
+
+# 2. Grab the URL from the environment
+database_url = os.getenv("DATABASE_URL")
+
+# 3. Import models AFTER environment is ready
+# This prevents database.py from crashing during the import phase
+from models import Base
+target_metadata = Base.metadata
+
+# 4. Alembic Config object
 config = context.config
 
-# Interpret the config file for Python logging.
-# This line sets up loggers basically.
+# 5. Force Alembic to use the environment variable URL
+if database_url:
+    config.set_main_option("sqlalchemy.url", database_url)
+
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# add your model's MetaData object here
-# for 'autogenerate' support
-# from myapp import mymodel
-# target_metadata = mymodel.Base.metadata
-target_metadata = Base.metadata
-
-# other values from the config, defined by the needs of env.py,
-# can be acquired:
-# my_important_option = config.get_main_option("my_important_option")
-# ... etc.
-
-
 def run_migrations_offline() -> None:
-    """Run migrations in 'offline' mode.
-
-    This configures the context with just a URL
-    and not an Engine, though an Engine is acceptable
-    here as well.  By skipping the Engine creation
-    we don't even need a DBAPI to be available.
-
-    Calls to context.execute() here emit the given string to the
-    script output.
-
-    """
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
@@ -51,24 +36,13 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
     )
-
     with context.begin_transaction():
         context.run_migrations()
 
-
-
-
-# 1. Load your .env file
-load_dotenv()
-
 def run_migrations_online():
-    # 2. Grab your database URL from your .env
-    database_url = os.getenv("DATABASE_URL")
-
-    # 3. Tell Alembic to use THIS url, not the one in the .ini file
+    # Use the configuration that now includes our injected URL
     configuration = config.get_section(config.config_ini_section)
-    configuration["sqlalchemy.url"] = database_url
-
+    
     connectable = engine_from_config(
         configuration,
         prefix="sqlalchemy.",
@@ -80,7 +54,6 @@ def run_migrations_online():
             connection=connection, 
             target_metadata=target_metadata
         )
-
         with context.begin_transaction():
             context.run_migrations()
 

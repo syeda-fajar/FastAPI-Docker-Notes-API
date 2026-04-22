@@ -1,42 +1,53 @@
+import os
+import time
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.exc import ArgumentError, OperationalError
 from dotenv import load_dotenv
-from sqlalchemy.exc import OperationalError
-import time
-import os
+
 load_dotenv()
 SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
 
 def get_engine_with_retry(url, max_retries=5, delay=2):
+    # CRITICAL FIX: If the URL is None, don't even try.
+    if not url:
+        print("Error: DATABASE_URL is None. Cannot create engine.")
+        return None
+
     attempt = 0
     while attempt < max_retries:
         try:
             print(f"Attempting to connect to DB (Attempt {attempt + 1}/{max_retries})...")
-    
             engine = create_engine(url)
-            print("Checking for Database... be patient!")
-            connection = engine.connect()
-            connection.close()
-            print(" Database connection successful!")
+            # Verify the connection
+            with engine.connect() as conn:
+                pass
+            print("Database connection successful!")
             return engine
-        except OperationalError as e:
+        except (OperationalError, ArgumentError) as e:
             attempt += 1
             print(f"Connection failed: {e}")
             if attempt < max_retries:
-                print(f"Retrying in {delay} seconds...")
                 time.sleep(delay)
             else:
-                print(" Max retries reached. Giving up.")
                 raise e
 
-
+# Initialize engine safely
 engine = get_engine_with_retry(SQLALCHEMY_DATABASE_URL)
 
+# If engine is None (because of the error), we create a dummy sessionmaker 
+# to prevent the app from crashing on import.
+if engine:
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+else:
+    SessionLocal = None
 
-SessionLocal =sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
 def get_db():
+    if SessionLocal is None:
+        raise Exception("Database session could not be initialized. Check DATABASE_URL.")
     db = SessionLocal()
     try:
         yield db
