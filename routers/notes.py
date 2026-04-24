@@ -4,6 +4,7 @@ from fastapi import Depends,APIRouter,status,HTTPException
 from sqlalchemy.orm import Session
 from oauth import get_current_user,OAuth2
 from schemas import NoteModel
+from datetime import datetime,timezone
 router =APIRouter(
      prefix="/notes",
      tags=["Notes"]
@@ -11,7 +12,7 @@ router =APIRouter(
 
 @router.get("/")
 async def getNote(db: Session = Depends(get_db),current_user:int =Depends(get_current_user)):
-          item=db.query(NoteTable).filter(NoteTable.user_id == current_user).all()
+          item=db.query(NoteTable).filter(NoteTable.user_id == current_user,NoteTable.delete_at ==None).all()
           return item
         
 
@@ -25,15 +26,16 @@ async def addNote(notes:NoteModel,db: Session = Depends(get_db),current_user: in
 
 @router.delete("/{notes_id}")
 async def DeleteNotes(notes_id:int,db: Session = Depends(get_db),current_user: int = Depends(get_current_user)):
-      item = db.query(NoteTable).filter(NoteTable.id == notes_id).first()
+      item = db.query(NoteTable).filter(NoteTable.id == notes_id,NoteTable.delete_at==None).first()
       if not item:
        raise HTTPException(status_code=404, detail="Not found")
 
       if item.user_id != current_user:
         raise HTTPException(status_code=403, detail="Not authorized to perform action")
-      db.delete(item)
+      item.delete_at =datetime.now()
       db.commit()
       return {"message": "Deleted"}
+
 
 @router.put("/{notes_id}")
 async def UpdateNote(notes_id:int,notes:NoteModel,db:Session=Depends(get_db),current_user: int = Depends(get_current_user)):

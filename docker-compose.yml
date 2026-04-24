@@ -8,9 +8,9 @@ services:
       POSTGRES_PASSWORD: mysecretpassword
       POSTGRES_DB: notes_db
     volumes:
-      - pgdata:/var/lib/postgresql/data  
+      - pgdata:/var/lib/postgresql/data
     ports:
-      - "5432:5432" # Allows you to connect via pgAdmin on Windows
+      - "5432:5432"
 
   api:
     build: .
@@ -19,9 +19,12 @@ services:
       - "8000:8000"
     depends_on:
       - db
-
+    environment:
+      - PORT=8000
     env_file:
       - .env
+    volumes:
+      - .:/app  # This is the "Magic" volume that syncs your village laptop and the container
 
 volumes:
-  pgdata: # This tells Docker to manage the 'pgdata' storage
+  pgdata: # Now this is at the correct level
